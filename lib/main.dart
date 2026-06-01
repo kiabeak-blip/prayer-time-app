@@ -18,8 +18,16 @@ final settingsScreenKey = GlobalKey<SettingsScreenState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.initialize();
-  await AzanService.instance.init();
+  try {
+    await NotificationService.initialize();
+  } catch (e) {
+    debugPrint('NotificationService init error: $e');
+  }
+  try {
+    await AzanService.instance.init();
+  } catch (e) {
+    debugPrint('AzanService init error: $e');
+  }
   runApp(const MyApp());
 }
 

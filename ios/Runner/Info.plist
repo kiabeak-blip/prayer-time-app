@@ -59,5 +59,10 @@
 	<string>Camera access is used to take a photo for your profile picture or upload a mosque timetable.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Photo library access is used to save images from the app.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>
