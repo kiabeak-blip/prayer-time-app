@@ -1,0 +1,93 @@
+name: prayer_times_app
+description: "Islamic prayer times app with dynamic calculation, Qibla direction, and notifications."
+publish_to: 'none'
+
+version: 1.0.0+2
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Location
+  geolocator: ^14.0.0
+  permission_handler: ^12.0.0+1
+
+  # Map & Qibla
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.0
+  flutter_compass: ^0.8.0
+
+  # Dynamic prayer time calculation
+  adhan_dart: ^2.0.1
+
+  # Notifications
+  flutter_local_notifications: ^20.1.0
+  timezone: ^0.10.1
+  flutter_timezone: ^5.0.0
+
+  # Settings persistence
+  shared_preferences: ^2.3.0
+
+  # Date formatting
+  intl: 0.20.2
+
+  # Localization
+  flutter_localizations:
+    sdk: flutter
+
+  speech_to_text: ^7.0.0
+
+  logger: ^2.0.2
+  audioplayers: ^6.0.0
+  http: ^1.2.0
+  url_launcher: ^6.3.0
+  cached_network_image: ^3.4.0
+  share_plus: ^10.0.0
+  path_provider: ^2.1.0
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+
+dependency_overrides:
+  speech_to_text_windows:
+    path: windows/speech_to_text_windows
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+  msix: ^3.16.7
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#1B3A2D"
+  adaptive_icon_foreground: "assets/app_icon.png"
+
+msix_config:
+  display_name: Prayer Times App
+  publisher_display_name: Prayer Times App
+  publisher: CN=Prayer Times App
+  identity_name: com.example.prayertimesapp
+  msix_version: 1.0.0.0
+  logo_path: assets/app_icon.png
+  capabilities: internetClient, location, microphone
+  certificate_path: build\windows\prayer_times_cert.pfx
+  certificate_password: prayertimes2024
+  install_certificate: false
+  sign_msix: true
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/kaaba.png
+    - assets/app_icon.png
+    - assets/audio/

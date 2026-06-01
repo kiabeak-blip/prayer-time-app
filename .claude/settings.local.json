@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:/dev/prayer_times_web/css\" \"C:/dev/prayer_times_web/js\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(cd /tmp)",
+      "Bash(npm pack *)",
+      "Bash(which python3 *)",
+      "Bash(/c/Users/Nani/AppData/Local/Programs/Python/Python311/python -c ' *)",
+      "Read(//c/dev/**)",
+      "Bash(powershell -Command \"Compress-Archive -Path 'prayer_times_web' -DestinationPath 'prayer_times_web.zip' -Force\")",
+      "Bash(flutter build *)",
+      "Bash(cp C:/dev/Projects/flutter/prayer_times_app/android/app/prayertimes-release.jks C:/Users/Iman_/Desktop/prayertimes-release.jks && echo \"Copied to Desktop\")",
+      "Bash(cp C:/dev/Projects/flutter/prayer_times_app/android/app/prayertimes-release.jks \"C:/Users/Nani/Desktop/prayertimes-release.jks\")",
+      "Read(//c/Users/Nani/Desktop/**)",
+      "Bash(flutter clean *)",
+      "Bash(flutter analyze *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

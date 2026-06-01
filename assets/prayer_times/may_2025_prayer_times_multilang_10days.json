@@ -1,0 +1,212 @@
+[
+  {
+    "date": "2025-05-01",
+    "prayers": {
+      "en": {
+        "fajr": "02:20",
+        "sunrise": "05:25",
+        "dhuhr": "13:10",
+        "asr": "17:17",
+        "maghrib": "20:51",
+        "isha": "23:44"
+      },
+      "sv": {
+        "gryning": "02:20",
+        "soluppgång": "05:25",
+        "dhohor": "13:10",
+        "asr": "17:17",
+        "solnedgång": "20:51",
+        "ishaa": "23:44"
+      }
+    }
+  },
+  {
+    "date": "2025-05-02",
+    "prayers": {
+      "en": {
+        "fajr": "02:20",
+        "sunrise": "05:23",
+        "dhuhr": "13:10",
+        "asr": "17:16",
+        "maghrib": "20:53",
+        "isha": "23:46"
+      },
+      "sv": {
+        "gryning": "02:20",
+        "soluppgång": "05:23",
+        "dhohor": "13:10",
+        "asr": "17:16",
+        "solnedgång": "20:53",
+        "ishaa": "23:46"
+      }
+    }
+  },
+  {
+    "date": "2025-05-03",
+    "prayers": {
+      "en": {
+        "fajr": "02:17",
+        "sunrise": "05:21",
+        "dhuhr": "13:10",
+        "asr": "17:16",
+        "maghrib": "20:56",
+        "isha": "23:49"
+      },
+      "sv": {
+        "gryning": "02:17",
+        "soluppgång": "05:21",
+        "dhohor": "13:10",
+        "asr": "17:16",
+        "solnedgång": "20:56",
+        "ishaa": "23:49"
+      }
+    }
+  },
+  {
+    "date": "2025-05-04",
+    "prayers": {
+      "en": {
+        "fajr": "02:15",
+        "sunrise": "05:19",
+        "dhuhr": "13:10",
+        "asr": "17:15",
+        "maghrib": "20:58",
+        "isha": "23:51"
+      },
+      "sv": {
+        "gryning": "02:15",
+        "soluppgång": "05:19",
+        "dhohor": "13:10",
+        "asr": "17:15",
+        "solnedgång": "20:58",
+        "ishaa": "23:51"
+      }
+    }
+  },
+  {
+    "date": "2025-05-05",
+    "prayers": {
+      "en": {
+        "fajr": "02:13",
+        "sunrise": "05:17",
+        "dhuhr": "13:10",
+        "asr": "17:14",
+        "maghrib": "21:00",
+        "isha": "23:54"
+      },
+      "sv": {
+        "gryning": "02:13",
+        "soluppgång": "05:17",
+        "dhohor": "13:10",
+        "asr": "17:14",
+        "solnedgång": "21:00",
+        "ishaa": "23:54"
+      }
+    }
+  },
+  {
+    "date": "2025-05-06",
+    "prayers": {
+      "en": {
+        "fajr": "02:11",
+        "sunrise": "05:15",
+        "dhuhr": "13:10",
+        "asr": "17:14",
+        "maghrib": "21:02",
+        "isha": "23:56"
+      },
+      "sv": {
+        "gryning": "02:11",
+        "soluppgång": "05:15",
+        "dhohor": "13:10",
+        "asr": "17:14",
+        "solnedgång": "21:02",
+        "ishaa": "23:56"
+      }
+    }
+  },
+  {
+    "date": "2025-05-07",
+    "prayers": {
+      "en": {
+        "fajr": "02:09",
+        "sunrise": "05:13",
+        "dhuhr": "13:09",
+        "asr": "17:13",
+        "maghrib": "21:04",
+        "isha": "23:58"
+      },
+      "sv": {
+        "gryning": "02:09",
+        "soluppgång": "05:13",
+        "dhohor": "13:09",
+        "asr": "17:13",
+        "solnedgång": "21:04",
+        "ishaa": "23:58"
+      }
+    }
+  },
+  {
+    "date": "2025-05-08",
+    "prayers": {
+      "en": {
+        "fajr": "02:07",
+        "sunrise": "05:11",
+        "dhuhr": "13:09",
+        "asr": "17:13",
+        "maghrib": "21:06",
+        "isha": "00:00"
+      },
+      "sv": {
+        "gryning": "02:07",
+        "soluppgång": "05:11",
+        "dhohor": "13:09",
+        "asr": "17:13",
+        "solnedgång": "21:06",
+        "ishaa": "00:00"
+      }
+    }
+  },
+  {
+    "date": "2025-05-09",
+    "prayers": {
+      "en": {
+        "fajr": "02:05",
+        "sunrise": "05:09",
+        "dhuhr": "13:09",
+        "asr": "17:12",
+        "maghrib": "21:08",
+        "isha": "00:03"
+      },
+      "sv": {
+        "gryning": "02:05",
+        "soluppgång": "05:09",
+        "dhohor": "13:09",
+        "asr": "17:12",
+        "solnedgång": "21:08",
+        "ishaa": "00:03"
+      }
+    }
+  },
+  {
+    "date": "2025-05-10",
+    "prayers": {
+      "en": {
+        "fajr": "02:03",
+        "sunrise": "05:07",
+        "dhuhr": "13:09",
+        "asr": "17:12",
+        "maghrib": "21:10",
+        "isha": "00:05"
+      },
+      "sv": {
+        "gryning": "02:03",
+        "soluppgång": "05:07",
+        "dhohor": "13:09",
+        "asr": "17:12",
+        "solnedgång": "21:10",
+        "ishaa": "00:05"
+      }
+    }
+  }
+]
