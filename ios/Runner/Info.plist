@@ -51,6 +51,8 @@
 	<string>Your location is used to calculate accurate prayer times and Qibla direction for your area.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Microphone access is used for voice search to find Quranic verses and Islamic content.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition is used to allow you to search for Quranic verses and Islamic content using your voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is used to upload mosque timetable images and set a profile picture.</string>
 	<key>NSCameraUsageDescription</key>
