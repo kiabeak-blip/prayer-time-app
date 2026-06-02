@@ -2,10 +2,10 @@ name: prayer_times_app
 description: "Islamic prayer times app with dynamic calculation, Qibla direction, and notifications."
 publish_to: 'none'
 
-version: 1.0.0+11
+version: 1.0.0+12
 
 environment:
-  sdk: ^3.7.2
+  sdk: ^3.8.0
 
 dependencies:
   flutter:
