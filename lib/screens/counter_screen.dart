@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-
-const _sttChannel = MethodChannel('speech_to_text_windows');
+// speech_to_text removed for iOS 26 compatibility
 
 // ── Common dhikr presets ──────────────────────────────────────────────────────
 
@@ -110,8 +108,9 @@ class CounterScreenState extends State<CounterScreen> {
   List<_SavedDhikr> _savedDhikr = [];
 
   final _phraseController = TextEditingController();
-  final _speech = stt.SpeechToText();
   final bool _isWindows = Platform.isWindows;
+  // Speech disabled — removed for iOS 26 compatibility
+  static const bool _speechAvailableStatic = false;
 
   @override
   void initState() {
@@ -234,196 +233,35 @@ class CounterScreenState extends State<CounterScreen> {
     await prefs.setString('dhikr_phrase', phrase);
   }
 
-  // ── Speech engine ─────────────────────────────────────────────────────────
+  // ── Speech engine (disabled — removed for iOS 26 compatibility) ──────────
 
   Future<void> _initSpeech() async {
-    if (_isWindows) {
-      _sttChannel.setMethodCallHandler(_onWindowsCallback);
-      final ok =
-          await _sttChannel.invokeMethod<bool>(
-              'initialize', {'debugLogging': false}) ??
-              false;
-      if (mounted) setState(() => _speechAvailable = ok);
-    } else {
-      final ok = await _speech.initialize(
-        onError: (e) {
-          if (mounted) setState(() => _isListening = false);
-        },
-        onStatus: (status) {
-          if (!mounted) return;
-          if (status == stt.SpeechToText.doneStatus && _isListening) {
-            Future.delayed(const Duration(milliseconds: 200),
-                _beginListenSession);
-          }
-        },
-      );
-      if (mounted) setState(() => _speechAvailable = ok);
-
-      // Resolve Arabic locale once
-      if (ok) _resolveArabicLocale();
-    }
-    if (mounted) setState(() => _speechInitialized = true);
-  }
-
-  /// Finds the best Arabic locale the device supports.
-  /// If none is listed, falls back to trying 'ar-SA' directly — Android
-  /// sometimes supports locales it doesn't enumerate.
-  Future<void> _resolveArabicLocale() async {
-    try {
-      final locales = await _speech.locales();
-      final arabicLocales =
-          locales.where((l) => l.localeId.startsWith('ar')).toList();
-
-      if (arabicLocales.isNotEmpty) {
-        // Device has Arabic listed — use it
-        if (mounted) {
-          setState(() {
-            _localeId = arabicLocales.first.localeId;
-            _arabicLocaleConfirmed = true;
-            _arabicLocaleFailed    = false;
-          });
-        }
-      } else {
-        // Not listed — try ar-SA anyway (unlisted but often works on Samsung)
-        if (mounted) {
-          setState(() {
-            _localeId = 'ar-SA';
-            _arabicLocaleConfirmed = false;
-            _arabicLocaleFailed    = false;
-          });
-        }
-      }
-    } catch (_) {
-      // On error, still attempt ar-SA
-      if (mounted) {
-        setState(() {
-          _localeId = 'ar-SA';
-          _arabicLocaleConfirmed = false;
-        });
-      }
+    // Speech recognition removed for iOS 26 compatibility
+    if (mounted) {
+      setState(() {
+        _speechAvailable   = false;
+        _speechInitialized = true;
+      });
     }
   }
 
-  Future<dynamic> _onWindowsCallback(MethodCall call) async {
-    if (!mounted) return;
-    switch (call.method) {
-      case 'textRecognition':
-        _handleWindowsRecognition(call.arguments as String);
-      case 'notifyStatus':
-        final status = call.arguments as String;
-        if (status == 'done' && _isListening) {
-          Future.delayed(
-              const Duration(milliseconds: 150), _beginListenSession);
-        }
-        if (status == 'notListening' && !_isListening) setState(() {});
-      case 'notifyError':
-        setState(() => _isListening = false);
-    }
-  }
+  Future<void> _resolveArabicLocale() async {}
 
-  void _handleWindowsRecognition(String resultJson) {
-    if (!mounted) return;
-    try {
-      final map  = jsonDecode(resultJson) as Map<String, dynamic>;
-      final words = map['recognizedWords'] as String? ??
-          (() {
-            final alts = map['alternates'] as List<dynamic>?;
-            return (alts?.first as Map<String, dynamic>?)?['recognizedWords']
-                    as String? ??
-                '';
-          })();
-      final isFinal = map['finalResult'] as bool? ?? true;
-      setState(() => _lastHeard = words);
-      if (isFinal) {
-        if (_phraseMatches(words, _phrase)) _incrementWithFlash();
-        if (_isListening && mounted) {
-          Future.delayed(
-              const Duration(milliseconds: 150), _beginListenSession);
-        }
-      }
-    } catch (_) {}
-  }
+  Future<void> _beginListenSession() async {}
 
-  Future<void> _beginListenSession() async {
-    if (!_speechAvailable || !_isListening || !mounted) return;
+  Future<dynamic> _onWindowsCallback(MethodCall call) async {}
 
-    if (_isWindows) {
-      // Windows STT: pass langTag when phrase is Arabic
-      final args = <String, dynamic>{
-        'partialResults':   true,
-        'onDevice':         false,
-        'listenMode':       0,
-        'sampleRate':       0,
-        'enableHaptics':    false,
-        'autoPunctuation':  false,
-      };
-      if (_isArabic(_phrase)) args['langTag'] = 'ar-SA';
-      await _sttChannel.invokeMethod('listen', args);
-    } else {
-      // Android/iOS: use resolved Arabic locale when phrase is Arabic
-      final useLocale = (_isArabic(_phrase) && !_arabicLocaleFailed)
-          ? _localeId
-          : null;
-
-      try {
-        await _speech.listen(
-          onResult: (result) {
-            if (!mounted) return;
-            final words = result.recognizedWords;
-            setState(() => _lastHeard = words);
-            if (result.finalResult) {
-              if (_phraseMatches(words, _phrase)) _incrementWithFlash();
-              if (_isListening) {
-                Future.delayed(
-                    const Duration(milliseconds: 200), _beginListenSession);
-              }
-            }
-          },
-          localeId:       useLocale,
-          partialResults: true,
-          cancelOnError:  false,
-          listenMode:     stt.ListenMode.dictation,
-        );
-      } catch (e) {
-        // Arabic locale failed — mark it and retry with device default
-        if (useLocale != null && mounted) {
-          setState(() => _arabicLocaleFailed = true);
-          Future.delayed(
-              const Duration(milliseconds: 100), _beginListenSession);
-        }
-      }
-    }
-  }
+  void _handleWindowsRecognition(String resultJson) {}
 
   Future<void> _toggleListening() async {
-    if (_isListening) {
-      // ── Stop ──────────────────────────────────────────────────────────
-      if (_isWindows) {
-        _sttChannel.invokeMethod('stop');
-      } else {
-        _speech.stop();
-      }
+    // Speech recognition disabled for iOS 26 compatibility
+    if (mounted) {
       setState(() {
-        _isListening = false;
-        _lastHeard   = '';
+        _speechAvailable   = false;
+        _speechInitialized = true;
+        _isListening       = false;
       });
-      return;
     }
-
-    // ── Start — initialise on first use ───────────────────────────────
-    if (!_speechInitialized) {
-      setState(() => _speechInitializing = true);
-      await _initSpeech();
-      setState(() => _speechInitializing = false);
-
-      if (!_speechAvailable) return; // permission denied — don't start
-    }
-
-    setState(() {
-      _isListening = true;
-      _lastHeard   = '';
-    });
-    _beginListenSession();
   }
 
   // ── Counter ───────────────────────────────────────────────────────────────
@@ -526,11 +364,6 @@ class CounterScreenState extends State<CounterScreen> {
 
   @override
   void dispose() {
-    if (_isWindows) {
-      _sttChannel.invokeMethod('stop');
-    } else {
-      _speech.stop();
-    }
     _phraseController.dispose();
     super.dispose();
   }
