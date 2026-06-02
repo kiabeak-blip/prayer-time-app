@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'screens/settings_about.dart';
@@ -17,18 +18,29 @@ final homeScreenKey     = GlobalKey<HomeScreenState>();
 final settingsScreenKey = GlobalKey<SettingsScreenState>();
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await NotificationService.initialize();
-  } catch (e) {
-    debugPrint('NotificationService init error: $e');
-  }
-  try {
-    await AzanService.instance.init();
-  } catch (e) {
-    debugPrint('AzanService init error: $e');
-  }
-  runApp(const MyApp());
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    FlutterError.onError = (details) {
+      debugPrint('FlutterError: ${details.exceptionAsString()}');
+      debugPrint('${details.stack}');
+    };
+
+    try {
+      await NotificationService.initialize();
+    } catch (e) {
+      debugPrint('NotificationService init error: $e');
+    }
+    try {
+      await AzanService.instance.init();
+    } catch (e) {
+      debugPrint('AzanService init error: $e');
+    }
+    runApp(const MyApp());
+  }, (error, stack) {
+    debugPrint('Uncaught error: $error');
+    debugPrint('$stack');
+  });
 }
 
 class MyApp extends StatelessWidget {
