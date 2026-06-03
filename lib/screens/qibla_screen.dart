@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:logger/logger.dart';
 import '../services/location_cache.dart';
 
@@ -217,24 +218,38 @@ class _QiblaScreenState extends State<QiblaScreen> {
               ),
             ],
           ),
-          Positioned(
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS)
+            Positioned(
+              bottom: 20,
+              child: StreamBuilder<CompassEvent>(
+                stream: FlutterCompass.events,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError || !snapshot.hasData) return const SizedBox();
+
+                  final heading = snapshot.data!.heading ?? 0;
+                  final qiblaBearing = _calculateQiblaDirection(userLatLng, _kaabaLatLng);
+                  final rotation = (qiblaBearing - heading) * (math.pi / 180);
+
+                  return Transform.rotate(
+                    angle: rotation,
+                    child: const Icon(Icons.navigation, size: 50, color: Colors.red),
+                  );
+                },
+              ),
+            )
+          else
+            Positioned(
               bottom: 20,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white70,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.explore, color: Colors.green, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Qibla direction: ${_calculateQiblaDirection(userLatLng, _kaabaLatLng).toStringAsFixed(1)}°',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                    ),
-                  ],
+                child: Text(
+                  'Compass requires a mobile device  |  Qibla: ${_calculateQiblaDirection(userLatLng, _kaabaLatLng).toStringAsFixed(1)}°',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
             ),
