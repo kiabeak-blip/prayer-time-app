@@ -112,6 +112,7 @@ class CounterScreenState extends State<CounterScreen> {
   bool   _arabicLocaleFailed    = false; // true = ar-SA was tried and failed
   int    _occurrencesInSession  = 0; // phrase repetitions already counted in the current listen session
   int?   _targetCount;          // beep/notify once _count reaches this
+  bool   _isDictating           = false; // dictating the custom-phrase text field
 
   List<_SavedDhikr> _savedDhikr = [];
 
@@ -374,7 +375,11 @@ class CounterScreenState extends State<CounterScreen> {
     if (!mounted) return;
     switch (call.method) {
       case 'textRecognition':
-        _handleWindowsRecognition(call.arguments as String);
+        if (_isDictating) {
+          _handleWindowsDictation(call.arguments as String);
+        } else {
+          _handleWindowsRecognition(call.arguments as String);
+        }
       case 'notifyStatus':
         final status = call.arguments as String;
         if (status == 'done' && _isListening) {
@@ -383,7 +388,10 @@ class CounterScreenState extends State<CounterScreen> {
         }
         if (status == 'notListening' && !_isListening) setState(() {});
       case 'notifyError':
-        setState(() => _isListening = false);
+        setState(() {
+          _isListening = false;
+          _isDictating = false;
+        });
     }
   }
 
@@ -420,6 +428,89 @@ class CounterScreenState extends State<CounterScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  void _handleWindowsDictation(String resultJson) {
+    if (!mounted) return;
+    try {
+      final map = jsonDecode(resultJson) as Map<String, dynamic>;
+      final words = map['recognizedWords'] as String? ??
+          (() {
+            final alts = map['alternates'] as List<dynamic>?;
+            return (alts?.first as Map<String, dynamic>?)?['recognizedWords']
+                    as String? ??
+                '';
+          })();
+      final isFinal = map['finalResult'] as bool? ?? true;
+      if (words.isNotEmpty) _phraseController.text = words;
+      if (isFinal) {
+        setState(() => _isDictating = false);
+        _sttChannel.invokeMethod('stop');
+        if (words.trim().isNotEmpty) _setPhrase(words.trim());
+      }
+    } catch (_) {}
+  }
+
+  /// Dictate the custom-phrase text field by voice, separate from the
+  /// counting mic so the two don't fight over the speech engine.
+  Future<void> _toggleDictation() async {
+    if (_isDictating) {
+      if (_isWindows) {
+        _sttChannel.invokeMethod('stop');
+      } else {
+        _speech.stop();
+      }
+      setState(() => _isDictating = false);
+      return;
+    }
+
+    if (_isListening) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stop the counter mic first')),
+      );
+      return;
+    }
+
+    if (!_speechInitialized) {
+      setState(() => _speechInitializing = true);
+      await _initSpeech();
+      setState(() => _speechInitializing = false);
+      if (!_speechAvailable) return;
+    }
+
+    setState(() => _isDictating = true);
+
+    if (_isWindows) {
+      await _sttChannel.invokeMethod('listen', {
+        'partialResults':  true,
+        'onDevice':        false,
+        'listenMode':      0,
+        'sampleRate':      0,
+        'enableHaptics':   false,
+        'autoPunctuation': false,
+      });
+    } else {
+      try {
+        await _speech.listen(
+          onResult: (result) {
+            if (!mounted) return;
+            if (result.recognizedWords.isNotEmpty) {
+              _phraseController.text = result.recognizedWords;
+            }
+            if (result.finalResult) {
+              setState(() => _isDictating = false);
+              final words = result.recognizedWords.trim();
+              if (words.isNotEmpty) _setPhrase(words);
+            }
+          },
+          partialResults: true,
+          cancelOnError: true,
+          listenMode: stt.ListenMode.dictation,
+        );
+      } catch (_) {
+        if (mounted) setState(() => _isDictating = false);
+      }
+    }
   }
 
   Future<void> _beginListenSession() async {
@@ -488,6 +579,12 @@ class CounterScreenState extends State<CounterScreen> {
   }
 
   Future<void> _toggleListening() async {
+    if (_isDictating) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Finish dictating the phrase first')),
+      );
+      return;
+    }
     if (_isListening) {
       // ── Stop ──────────────────────────────────────────────────────────
       if (_isWindows) {
@@ -795,6 +892,16 @@ class CounterScreenState extends State<CounterScreen> {
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      icon: Icon(
+                        _isDictating ? Icons.mic : Icons.mic_none,
+                        color: _isDictating ? Colors.red : null,
+                      ),
+                      tooltip: _isDictating
+                          ? 'Stop dictating'
+                          : 'Dictate phrase by voice',
+                      onPressed: _toggleDictation,
+                    ),
                     IconButton(
                       icon: const Icon(Icons.bookmark_add_outlined),
                       tooltip: 'Save to My Dhikr',
