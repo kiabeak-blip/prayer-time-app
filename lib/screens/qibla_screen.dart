@@ -25,7 +25,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
   double _heading = 0;
   StreamSubscription<CompassEvent>? _compassSub;
   final MapController _mapController = MapController();
-  bool _orientationLocked = false;
+  bool _compassLocked = false;
   bool _isFullscreen = false;
 
   static const _kaabaLatLng = LatLng(21.4225, 39.8262);
@@ -49,7 +49,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
     if (isMobile) {
       _compassSub = FlutterCompass.events?.listen((event) {
         final heading = event.heading;
-        if (heading == null || !mounted) return;
+        if (heading == null || !mounted || _compassLocked) return;
         setState(() => _heading = heading);
         // Rotate the map so the top of the phone always points to true north's
         // current heading, making the Kaaba line/marker reflect the live qibla
@@ -66,27 +66,14 @@ class _QiblaScreenState extends State<QiblaScreen> {
   @override
   void dispose() {
     _compassSub?.cancel();
-    if (_orientationLocked) {
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-    }
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     super.dispose();
   }
 
-  void _toggleOrientationLock() {
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-    setState(() => _orientationLocked = !_orientationLocked);
-    if (_orientationLocked) {
-      SystemChrome.setPreferredOrientations(
-        isPortrait
-            ? [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
-            : [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-      );
-    } else {
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-    }
+  void _toggleCompassLock() {
+    setState(() => _compassLocked = !_compassLocked);
   }
 
   void _toggleFullscreen() {
@@ -228,11 +215,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
               title: const Text('Qibla Direction'),
               actions: [
                 IconButton(
-                  icon: Icon(
-                    _orientationLocked ? Icons.screen_lock_rotation : Icons.screen_rotation,
-                  ),
-                  tooltip: _orientationLocked ? 'Unlock orientation' : 'Lock orientation',
-                  onPressed: _toggleOrientationLock,
+                  icon: Icon(_compassLocked ? Icons.lock : Icons.lock_open),
+                  tooltip: _compassLocked ? 'Unlock compass' : 'Lock compass',
+                  onPressed: _toggleCompassLock,
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.layers),
