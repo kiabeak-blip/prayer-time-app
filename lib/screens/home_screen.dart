@@ -357,7 +357,19 @@ class HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Step 4: permission is granted — get position with a generous timeout
+      // Step 4: permission is granted. Show a last-known fix immediately if
+      // one exists, so cold GPS doesn't leave the user staring at a spinner.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() {
+          _position = last;
+          _loadState = _LoadState.ready;
+        });
+        _calculate();
+        _fetchCityName(last.latitude, last.longitude);
+      }
+
+      // Step 5: refine with a fresh fix in the background. Generous timeout
       // so we don't hang forever if GPS is slow on first fix.
       final position = await Geolocator.getCurrentPosition(
         locationSettings:
@@ -376,7 +388,10 @@ class HomeScreenState extends State<HomeScreen> {
       _calculate();
       _fetchCityName(position.latitude, position.longitude);
     } catch (e) {
-      if (mounted) {
+      // If a last-known fix already rendered the screen, keep it — don't
+      // replace good cached data with an error just because the refined
+      // fresh fix timed out.
+      if (mounted && _position == null) {
         setState(() {
           _loadState = _LoadState.error;
           _errorMessage = e.toString().replaceFirst('Exception: ', '');

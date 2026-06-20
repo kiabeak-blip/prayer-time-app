@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,6 +25,8 @@ class _QiblaScreenState extends State<QiblaScreen> {
   double _heading = 0;
   StreamSubscription<CompassEvent>? _compassSub;
   final MapController _mapController = MapController();
+  bool _orientationLocked = false;
+  bool _isFullscreen = false;
 
   static const _kaabaLatLng = LatLng(21.4225, 39.8262);
 
@@ -63,7 +66,34 @@ class _QiblaScreenState extends State<QiblaScreen> {
   @override
   void dispose() {
     _compassSub?.cancel();
+    if (_orientationLocked) {
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    }
+    if (_isFullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     super.dispose();
+  }
+
+  void _toggleOrientationLock() {
+    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    setState(() => _orientationLocked = !_orientationLocked);
+    if (_orientationLocked) {
+      SystemChrome.setPreferredOrientations(
+        isPortrait
+            ? [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
+            : [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+      );
+    } else {
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    }
+  }
+
+  void _toggleFullscreen() {
+    setState(() => _isFullscreen = !_isFullscreen);
+    SystemChrome.setEnabledSystemUIMode(
+      _isFullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -186,31 +216,75 @@ class _QiblaScreenState extends State<QiblaScreen> {
 
     final userLatLng = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
     final qiblaBearing = _calculateQiblaDirection(userLatLng, _kaabaLatLng);
-    final tileUrl = _tileType == 'normal'
-        ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-        : 'https://tile.opentopomap.org/{z}/{x}/{y}.png';
     final bounds = LatLngBounds.fromPoints([userLatLng, _kaabaLatLng]);
     final isMobile = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.iOS);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Qibla Direction'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.layers),
-            tooltip: 'Toggle map style',
-            onPressed: () => setState(
-              () => _tileType = _tileType == 'normal' ? 'satellite' : 'normal',
+      appBar: _isFullscreen
+          ? null
+          : AppBar(
+              title: const Text('Qibla Direction'),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    _orientationLocked ? Icons.screen_lock_rotation : Icons.screen_rotation,
+                  ),
+                  tooltip: _orientationLocked ? 'Unlock orientation' : 'Lock orientation',
+                  onPressed: _toggleOrientationLock,
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.layers),
+                  tooltip: 'Map style',
+                  initialValue: _tileType,
+                  onSelected: (value) => setState(() => _tileType = value),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(value: 'normal', child: Text('Normal')),
+                    PopupMenuItem(value: 'satellite', child: Text('Satellite')),
+                    PopupMenuItem(value: 'hybrid', child: Text('Hybrid')),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.fullscreen),
+                  tooltip: 'Maximize map',
+                  onPressed: _toggleFullscreen,
+                ),
+              ],
             ),
-          ),
+      body: Stack(
+        children: [
+          _buildBody(isMobile, qiblaBearing, userLatLng, bounds),
+          if (_isFullscreen)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: SafeArea(
+                child: FloatingActionButton.small(
+                  heroTag: 'qibla_fullscreen_exit',
+                  onPressed: _toggleFullscreen,
+                  tooltip: 'Exit fullscreen',
+                  child: const Icon(Icons.fullscreen_exit),
+                ),
+              ),
+            ),
         ],
       ),
-      body: Column(
-        children: [
+    );
+  }
+
+  Widget _buildBody(
+    bool isMobile,
+    double qiblaBearing,
+    LatLng userLatLng,
+    LatLngBounds bounds,
+  ) {
+    return Column(
+      children: [
           // ── Live Qibla Compass ───────────────────────────────────────────
-          if (isMobile)
+          if (_isFullscreen)
+            const SizedBox.shrink()
+          else if (isMobile)
             Builder(
               builder: (context) {
                 final heading = _heading;
@@ -328,12 +402,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
                 initialRotation: -_heading,
               ),
               children: [
-                TileLayer(
-                  key: ValueKey(_tileType),
-                  urlTemplate: tileUrl,
-                  subdomains: const ['a', 'b', 'c'],
-                  userAgentPackageName: 'com.muslimapp.awqat',
-                ),
+                ..._buildTileLayers(),
                 PolylineLayer(
                   polylines: [
                     Polyline(
@@ -363,8 +432,47 @@ class _QiblaScreenState extends State<QiblaScreen> {
             ),
           ),
         ],
-      ),
-    );
+      );
+  }
+
+  List<TileLayer> _buildTileLayers() {
+    const satelliteUrl =
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    const labelsUrl =
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+    switch (_tileType) {
+      case 'satellite':
+        return [
+          TileLayer(
+            key: const ValueKey('satellite'),
+            urlTemplate: satelliteUrl,
+            userAgentPackageName: 'com.muslimapp.awqat',
+          ),
+        ];
+      case 'hybrid':
+        return [
+          TileLayer(
+            key: const ValueKey('hybrid-base'),
+            urlTemplate: satelliteUrl,
+            userAgentPackageName: 'com.muslimapp.awqat',
+          ),
+          TileLayer(
+            key: const ValueKey('hybrid-labels'),
+            urlTemplate: labelsUrl,
+            userAgentPackageName: 'com.muslimapp.awqat',
+          ),
+        ];
+      default:
+        return [
+          TileLayer(
+            key: const ValueKey('normal'),
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            subdomains: const ['a', 'b', 'c'],
+            userAgentPackageName: 'com.muslimapp.awqat',
+          ),
+        ];
+    }
   }
 
   List<Widget> _compassLabels(bool isAligned) {
