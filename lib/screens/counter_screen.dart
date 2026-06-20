@@ -58,31 +58,35 @@ String _normalise(String text) {
   return text.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 }
 
-/// Multi-strategy phrase match — handles partial recognition, spacing
-/// differences and noisy results.
-bool _phraseMatches(String heard, String phrase) {
-  final h  = _normalise(heard);
-  final p  = _normalise(phrase);
+/// Counts non-overlapping occurrences of [phrase] inside [heard], so a
+/// continuous speech session can be scored for every repetition spoken,
+/// not just whether the phrase appeared at all.
+int _countOccurrences(String heard, String phrase) {
+  final h = _normalise(heard);
+  final p = _normalise(phrase);
+  if (p.isEmpty) return 0;
 
-  // 1. Direct substring
-  if (h.contains(p)) return true;
+  final direct = _countSubstring(h, p);
+  if (direct > 0) return direct;
 
-  // 2. Spaceless (سبحانالله vs سبحان الله)
+  // Spacing differences (سبحانالله vs سبحان الله)
   final hNoSpace = h.replaceAll(' ', '');
   final pNoSpace = p.replaceAll(' ', '');
-  if (hNoSpace.contains(pNoSpace)) return true;
+  if (pNoSpace.isNotEmpty) return _countSubstring(hNoSpace, pNoSpace);
+  return 0;
+}
 
-  // 3. Word-overlap: require ≥ 60 % of phrase words present in heard
-  final pWords = p.split(' ').where((w) => w.length > 1).toList();
-  if (pWords.length >= 2) {
-    final matched = pWords.where((w) => h.contains(w)).length;
-    if (matched >= (pWords.length * 0.6).ceil()) return true;
+int _countSubstring(String text, String pattern) {
+  if (pattern.isEmpty) return 0;
+  var count = 0;
+  var start = 0;
+  while (true) {
+    final idx = text.indexOf(pattern, start);
+    if (idx == -1) break;
+    count++;
+    start = idx + pattern.length;
   }
-
-  // 4. First-word match (recognition sometimes drops الله at the end)
-  if (pWords.isNotEmpty && h.contains(pWords.first)) return true;
-
-  return false;
+  return count;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,6 +110,8 @@ class CounterScreenState extends State<CounterScreen> {
   String? _localeId;            // resolved Arabic or device locale
   bool   _arabicLocaleConfirmed = false; // true = device listed it; false = best-effort
   bool   _arabicLocaleFailed    = false; // true = ar-SA was tried and failed
+  int    _occurrencesInSession  = 0; // phrase repetitions already counted in the current listen session
+  int?   _targetCount;          // beep/notify once _count reaches this
 
   List<_SavedDhikr> _savedDhikr = [];
 
@@ -137,6 +143,7 @@ class CounterScreenState extends State<CounterScreen> {
       setState(() {
         _count  = prefs.getInt('dhikr_count')   ?? 0;
         _phrase = prefs.getString('dhikr_phrase') ?? 'سبحان الله';
+        _targetCount = prefs.getInt('dhikr_target');
         _phraseController.text = _phrase;
         _savedDhikr = saved;
       });
@@ -232,6 +239,65 @@ class CounterScreenState extends State<CounterScreen> {
   Future<void> _savePhrase(String phrase) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('dhikr_phrase', phrase);
+  }
+
+  Future<void> _setTargetCount(int? value) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _targetCount = value);
+    if (value == null) {
+      await prefs.remove('dhikr_target');
+    } else {
+      await prefs.setInt('dhikr_target', value);
+    }
+  }
+
+  Future<void> _promptSetTarget() async {
+    final ctrl = TextEditingController(
+        text: _targetCount?.toString() ?? '');
+    final result = await showDialog<int?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Target Count'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Beep when count reaches…',
+            hintText: 'e.g. 33, 100',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          if (_targetCount != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, -1),
+              child: const Text('Clear', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(ctrl.text.trim())),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    await _setTargetCount(result == -1 ? null : result);
+  }
+
+  void _checkTargetReached() {
+    if (_targetCount != null && _count == _targetCount) {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('🎯 Target of $_targetCount reached!')),
+        );
+      }
+    }
   }
 
   // ── Speech engine ─────────────────────────────────────────────────────────
@@ -334,8 +400,20 @@ class CounterScreenState extends State<CounterScreen> {
           })();
       final isFinal = map['finalResult'] as bool? ?? true;
       setState(() => _lastHeard = words);
+
+      // Count every repetition as it appears in the growing transcript, so
+      // the counter ticks up live without waiting for the session to end.
+      final occurrences = _countOccurrences(words, _phrase);
+      if (occurrences > _occurrencesInSession) {
+        final newOnes = occurrences - _occurrencesInSession;
+        _occurrencesInSession = occurrences;
+        for (var i = 0; i < newOnes; i++) {
+          _incrementWithFlash();
+        }
+      }
+
       if (isFinal) {
-        if (_phraseMatches(words, _phrase)) _incrementWithFlash();
+        _occurrencesInSession = 0;
         if (_isListening && mounted) {
           Future.delayed(
               const Duration(milliseconds: 150), _beginListenSession);
@@ -371,8 +449,22 @@ class CounterScreenState extends State<CounterScreen> {
             if (!mounted) return;
             final words = result.recognizedWords;
             setState(() => _lastHeard = words);
+
+            // Count every repetition as it appears in the growing
+            // transcript, so the counter ticks up live without waiting
+            // for the session to end (which only happens on a pause or
+            // manual stop).
+            final occurrences = _countOccurrences(words, _phrase);
+            if (occurrences > _occurrencesInSession) {
+              final newOnes = occurrences - _occurrencesInSession;
+              _occurrencesInSession = occurrences;
+              for (var i = 0; i < newOnes; i++) {
+                _incrementWithFlash();
+              }
+            }
+
             if (result.finalResult) {
-              if (_phraseMatches(words, _phrase)) _incrementWithFlash();
+              _occurrencesInSession = 0;
               if (_isListening) {
                 Future.delayed(
                     const Duration(milliseconds: 200), _beginListenSession);
@@ -423,6 +515,7 @@ class CounterScreenState extends State<CounterScreen> {
       _isListening = true;
       _lastHeard   = '';
     });
+    _occurrencesInSession = 0;
     _beginListenSession();
   }
 
@@ -434,6 +527,7 @@ class CounterScreenState extends State<CounterScreen> {
       _phraseDetectedFlash = true;
     });
     _saveCount();
+    _checkTargetReached();
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) setState(() => _phraseDetectedFlash = false);
     });
@@ -442,6 +536,7 @@ class CounterScreenState extends State<CounterScreen> {
   void _increment() {
     setState(() => _count++);
     _saveCount();
+    _checkTargetReached();
   }
 
   Future<void> _reset() async {
@@ -837,7 +932,20 @@ class CounterScreenState extends State<CounterScreen> {
             ),
           ),
 
-          const SizedBox(height: 28),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton.icon(
+              onPressed: _promptSetTarget,
+              icon: const Icon(Icons.notifications_active_outlined, size: 16),
+              label: Text(
+                _targetCount == null
+                    ? 'Set target count'
+                    : 'Target: $_targetCount',
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
 
           // ── Mic button ───────────────────────────────────────────────────
           Center(
