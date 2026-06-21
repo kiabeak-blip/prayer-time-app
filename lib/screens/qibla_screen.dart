@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
@@ -149,6 +150,16 @@ class _QiblaScreenState extends State<QiblaScreen> {
         });
       }
     }
+  }
+
+  /// Linearly interpolated point between [from] and [to] at fraction [t]
+  /// (0 = from, 1 = to) — used to place the direction arrow near the
+  /// Kaaba end of the line without overlapping the Kaaba marker itself.
+  LatLng _pointAlong(LatLng from, LatLng to, double t) {
+    return LatLng(
+      from.latitude + (to.latitude - from.latitude) * t,
+      from.longitude + (to.longitude - from.longitude) * t,
+    );
   }
 
   double _calculateQiblaDirection(LatLng from, LatLng to) {
@@ -409,7 +420,22 @@ class _QiblaScreenState extends State<QiblaScreen> {
                       point: _kaabaLatLng,
                       width: 60,
                       height: 60,
-                      child: Image.asset('assets/icons/kaaba.png', fit: BoxFit.contain),
+                      child: SvgPicture.asset('assets/icons/kaaba.svg', fit: BoxFit.contain),
+                    ),
+                    // Arrowhead near the Kaaba end of the line, rotated to the
+                    // qibla bearing, so the line's direction is unambiguous.
+                    Marker(
+                      point: _pointAlong(userLatLng, _kaabaLatLng, 0.9),
+                      width: 26,
+                      height: 26,
+                      child: Transform.rotate(
+                        angle: qiblaBearing * (math.pi / 180),
+                        child: const Icon(
+                          Icons.navigation,
+                          color: Colors.green,
+                          size: 26,
+                        ),
+                      ),
                     ),
                   ],
                 ),

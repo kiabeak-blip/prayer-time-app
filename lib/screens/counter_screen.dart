@@ -113,6 +113,7 @@ class CounterScreenState extends State<CounterScreen> {
   int    _occurrencesInSession  = 0; // phrase repetitions already counted in the current listen session
   int?   _targetCount;          // beep/notify once _count reaches this
   bool   _isDictating           = false; // dictating the custom-phrase text field
+  bool   _dictateArabic         = true;  // long-press the dictation mic to switch to English/device language
 
   List<_SavedDhikr> _savedDhikr = [];
 
@@ -481,15 +482,18 @@ class CounterScreenState extends State<CounterScreen> {
     setState(() => _isDictating = true);
 
     if (_isWindows) {
-      await _sttChannel.invokeMethod('listen', {
+      final args = <String, dynamic>{
         'partialResults':  true,
         'onDevice':        false,
         'listenMode':      0,
         'sampleRate':      0,
         'enableHaptics':   false,
         'autoPunctuation': false,
-      });
+      };
+      if (_dictateArabic) args['langTag'] = 'ar-SA';
+      await _sttChannel.invokeMethod('listen', args);
     } else {
+      final useLocale = _dictateArabic ? (_localeId ?? 'ar-SA') : null;
       try {
         await _speech.listen(
           onResult: (result) {
@@ -503,6 +507,7 @@ class CounterScreenState extends State<CounterScreen> {
               if (words.isNotEmpty) _setPhrase(words);
             }
           },
+          localeId: useLocale,
           partialResults: true,
           cancelOnError: true,
           listenMode: stt.ListenMode.dictation,
@@ -511,6 +516,18 @@ class CounterScreenState extends State<CounterScreen> {
         if (mounted) setState(() => _isDictating = false);
       }
     }
+  }
+
+  void _toggleDictationLanguage() {
+    setState(() => _dictateArabic = !_dictateArabic);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_dictateArabic
+            ? 'Dictation language: Arabic'
+            : 'Dictation language: English / device default'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _beginListenSession() async {
@@ -892,15 +909,21 @@ class CounterScreenState extends State<CounterScreen> {
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: Icon(
-                        _isDictating ? Icons.mic : Icons.mic_none,
-                        color: _isDictating ? Colors.red : null,
-                      ),
-                      tooltip: _isDictating
+                    Tooltip(
+                      message: _isDictating
                           ? 'Stop dictating'
-                          : 'Dictate phrase by voice',
-                      onPressed: _toggleDictation,
+                          : 'Dictate phrase by voice '
+                              '(${_dictateArabic ? "Arabic" : "English"} — long-press to switch)',
+                      child: GestureDetector(
+                        onLongPress: _toggleDictationLanguage,
+                        child: IconButton(
+                          icon: Icon(
+                            _isDictating ? Icons.mic : Icons.mic_none,
+                            color: _isDictating ? Colors.red : null,
+                          ),
+                          onPressed: _toggleDictation,
+                        ),
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.bookmark_add_outlined),

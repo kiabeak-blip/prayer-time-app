@@ -21,6 +21,7 @@ dependencies:
   flutter_map: ^8.3.0
   latlong2: ^0.9.0
   flutter_compass: ^0.8.0
+  flutter_svg: ^2.0.10+1
 
   # Dynamic prayer time calculation
   adhan_dart: ^2.0.1
@@ -89,5 +90,6 @@ flutter:
 
   assets:
     - assets/icons/kaaba.png
+    - assets/icons/kaaba.svg
     - assets/app_icon.png
     - assets/audio/
