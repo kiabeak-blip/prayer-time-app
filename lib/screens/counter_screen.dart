@@ -58,35 +58,73 @@ String _normalise(String text) {
   return text.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 }
 
-/// Counts non-overlapping occurrences of [phrase] inside [heard], so a
-/// continuous speech session can be scored for every repetition spoken,
-/// not just whether the phrase appeared at all.
-int _countOccurrences(String heard, String phrase) {
+/// Multi-strategy fuzzy match for a single chunk of text against [phrase] —
+/// handles partial recognition, spacing differences and noisy results.
+/// Exact repeats of short, well-trained preset phrases match trivially via
+/// strategy 1; longer/custom phrases that the speech engine transcribes
+/// slightly differently between repetitions still match via 2–4.
+bool _fuzzyMatch(String heard, String phrase) {
   final h = _normalise(heard);
   final p = _normalise(phrase);
-  if (p.isEmpty) return 0;
+  if (p.isEmpty) return false;
 
-  final direct = _countSubstring(h, p);
-  if (direct > 0) return direct;
+  // 1. Direct substring
+  if (h.contains(p)) return true;
 
-  // Spacing differences (سبحانالله vs سبحان الله)
+  // 2. Spaceless (سبحانالله vs سبحان الله)
   final hNoSpace = h.replaceAll(' ', '');
   final pNoSpace = p.replaceAll(' ', '');
-  if (pNoSpace.isNotEmpty) return _countSubstring(hNoSpace, pNoSpace);
-  return 0;
+  if (hNoSpace.contains(pNoSpace)) return true;
+
+  // 3. Word-overlap: require ≥ 60% of phrase words present in heard
+  final pWords = p.split(' ').where((w) => w.length > 1).toList();
+  if (pWords.length >= 2) {
+    final matched = pWords.where((w) => h.contains(w)).length;
+    if (matched >= (pWords.length * 0.6).ceil()) return true;
+  }
+
+  // 4. First-word match (recognition sometimes drops a trailing word)
+  if (pWords.isNotEmpty && h.contains(pWords.first)) return true;
+
+  return false;
 }
 
-int _countSubstring(String text, String pattern) {
-  if (pattern.isEmpty) return 0;
-  var count = 0;
-  var start = 0;
+/// Scans the growing live transcript for new repetitions of [phrase],
+/// consuming words as they're matched so the same repetition is never
+/// counted twice. [wordsAlreadyConsumed] is the running count of words
+/// already accounted for in the current listen session; this function
+/// returns the updated count alongside how many new repetitions were found.
+({int newOccurrences, int wordsConsumed}) _scanForRepeats(
+  String heard,
+  String phrase,
+  int wordsAlreadyConsumed,
+) {
+  final words = _normalise(heard).split(' ').where((w) => w.isNotEmpty).toList();
+  final phraseWordCount =
+      _normalise(phrase).split(' ').where((w) => w.isNotEmpty).length;
+  if (phraseWordCount == 0) return (newOccurrences: 0, wordsConsumed: wordsAlreadyConsumed);
+
+  var consumed = wordsAlreadyConsumed;
+  var newOnes = 0;
+
   while (true) {
-    final idx = text.indexOf(pattern, start);
-    if (idx == -1) break;
-    count++;
-    start = idx + pattern.length;
+    // Try a window the size of the phrase, then one word larger, to absorb
+    // small recognition drift (extra/missing short connector words).
+    var matchedSize = 0;
+    for (final size in [phraseWordCount, phraseWordCount + 1]) {
+      if (consumed + size > words.length) continue;
+      final chunk = words.sublist(consumed, consumed + size).join(' ');
+      if (_fuzzyMatch(chunk, phrase)) {
+        matchedSize = size;
+        break;
+      }
+    }
+    if (matchedSize == 0) break;
+    consumed += matchedSize;
+    newOnes++;
   }
-  return count;
+
+  return (newOccurrences: newOnes, wordsConsumed: consumed);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,8 +148,9 @@ class CounterScreenState extends State<CounterScreen> {
   String? _localeId;            // resolved Arabic or device locale
   bool   _arabicLocaleConfirmed = false; // true = device listed it; false = best-effort
   bool   _arabicLocaleFailed    = false; // true = ar-SA was tried and failed
-  int    _occurrencesInSession  = 0; // phrase repetitions already counted in the current listen session
+  int    _wordsConsumedInSession  = 0; // words already matched into counted repetitions this listen session
   int?   _targetCount;          // beep/notify once _count reaches this
+  bool   _targetSoundEnabled    = true; // toggle for the target-reached beep
   bool   _isDictating           = false; // dictating the custom-phrase text field
   bool   _dictateArabic         = true;  // long-press the dictation mic to switch to English/device language
 
@@ -146,6 +185,7 @@ class CounterScreenState extends State<CounterScreen> {
         _count  = prefs.getInt('dhikr_count')   ?? 0;
         _phrase = prefs.getString('dhikr_phrase') ?? 'سبحان الله';
         _targetCount = prefs.getInt('dhikr_target');
+        _targetSoundEnabled = prefs.getBool('dhikr_target_sound') ?? true;
         _phraseController.text = _phrase;
         _savedDhikr = saved;
       });
@@ -256,44 +296,76 @@ class CounterScreenState extends State<CounterScreen> {
   Future<void> _promptSetTarget() async {
     final ctrl = TextEditingController(
         text: _targetCount?.toString() ?? '');
+    var soundEnabled = _targetSoundEnabled;
     final result = await showDialog<int?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Target Count'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Beep when count reaches…',
-            hintText: 'e.g. 33, 100',
-            border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Target Count'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Beep when count reaches…',
+                  hintText: 'e.g. 33, 100',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Play sound + vibrate'),
+                value: soundEnabled,
+                onChanged: (v) => setDialogState(() => soundEnabled = v),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          if (_targetCount != null)
+          actions: [
+            if (_targetCount != null)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, -1),
+                child: const Text('Clear', style: TextStyle(color: Colors.red)),
+              ),
             TextButton(
-              onPressed: () => Navigator.pop(ctx, -1),
-              child: const Text('Clear', style: TextStyle(color: Colors.red)),
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                _setSoundEnabled(soundEnabled);
+                Navigator.pop(ctx, int.tryParse(ctrl.text.trim()));
+              },
+              child: const Text('Save'),
             ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, int.tryParse(ctrl.text.trim())),
-            child: const Text('Save'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
     if (result == null) return;
     await _setTargetCount(result == -1 ? null : result);
   }
 
+  Future<void> _setSoundEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _targetSoundEnabled = enabled);
+    await prefs.setBool('dhikr_target_sound', enabled);
+  }
+
   void _checkTargetReached() {
     if (_targetCount != null && _count == _targetCount) {
-      SystemSound.play(SystemSoundType.alert);
-      HapticFeedback.heavyImpact();
+      if (_targetSoundEnabled) {
+        // A single SystemSound.alert is easy to miss — play a few in a row
+        // with haptics so it's actually noticeable.
+        for (var i = 0; i < 3; i++) {
+          Future.delayed(Duration(milliseconds: i * 300), () {
+            SystemSound.play(SystemSoundType.alert);
+            HapticFeedback.heavyImpact();
+          });
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('🎯 Target of $_targetCount reached!')),
@@ -412,17 +484,14 @@ class CounterScreenState extends State<CounterScreen> {
 
       // Count every repetition as it appears in the growing transcript, so
       // the counter ticks up live without waiting for the session to end.
-      final occurrences = _countOccurrences(words, _phrase);
-      if (occurrences > _occurrencesInSession) {
-        final newOnes = occurrences - _occurrencesInSession;
-        _occurrencesInSession = occurrences;
-        for (var i = 0; i < newOnes; i++) {
-          _incrementWithFlash();
-        }
+      final scan = _scanForRepeats(words, _phrase, _wordsConsumedInSession);
+      _wordsConsumedInSession = scan.wordsConsumed;
+      for (var i = 0; i < scan.newOccurrences; i++) {
+        _incrementWithFlash();
       }
 
       if (isFinal) {
-        _occurrencesInSession = 0;
+        _wordsConsumedInSession = 0;
         if (_isListening && mounted) {
           Future.delayed(
               const Duration(milliseconds: 150), _beginListenSession);
@@ -562,17 +631,14 @@ class CounterScreenState extends State<CounterScreen> {
             // transcript, so the counter ticks up live without waiting
             // for the session to end (which only happens on a pause or
             // manual stop).
-            final occurrences = _countOccurrences(words, _phrase);
-            if (occurrences > _occurrencesInSession) {
-              final newOnes = occurrences - _occurrencesInSession;
-              _occurrencesInSession = occurrences;
-              for (var i = 0; i < newOnes; i++) {
-                _incrementWithFlash();
-              }
+            final scan = _scanForRepeats(words, _phrase, _wordsConsumedInSession);
+            _wordsConsumedInSession = scan.wordsConsumed;
+            for (var i = 0; i < scan.newOccurrences; i++) {
+              _incrementWithFlash();
             }
 
             if (result.finalResult) {
-              _occurrencesInSession = 0;
+              _wordsConsumedInSession = 0;
               if (_isListening) {
                 Future.delayed(
                     const Duration(milliseconds: 200), _beginListenSession);
@@ -629,7 +695,7 @@ class CounterScreenState extends State<CounterScreen> {
       _isListening = true;
       _lastHeard   = '';
     });
-    _occurrencesInSession = 0;
+    _wordsConsumedInSession = 0;
     _beginListenSession();
   }
 
