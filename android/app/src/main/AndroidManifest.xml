@@ -11,11 +11,6 @@
     <!-- Microphone permission for voice counter -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Gallery / media access for timetable upload -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
     <!-- Notification permissions -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
