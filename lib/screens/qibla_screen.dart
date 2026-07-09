@@ -37,7 +37,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
   @override
   void initState() {
     super.initState();
-    // Show cached position instantly if available
+    // Show cached position instantly if available — check this screen's own
+    // cache first, then fall back to whatever the Daily screen already
+    // fetched, so whichever screen gets a fix first benefits the other.
+    _cachedPosition ??= LocationCache.toPosition();
     if (_cachedPosition != null) {
       _currentPosition = _cachedPosition;
       _state = _QiblaState.ready;
@@ -129,9 +132,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
       // 2. Get fresh position in background (low accuracy = fast)
       final fresh = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
+          accuracy: LocationAccuracy.low,
         ),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 20));
 
       _cachedPosition = fresh;
       LocationCache.lat = fresh.latitude;

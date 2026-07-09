@@ -12,6 +12,7 @@ import '../services/prayer_times_service.dart';
 import '../services/notification_service.dart';
 import '../services/settings_service.dart';
 import '../services/azan_service.dart';
+import '../services/location_cache.dart';
 import '../utils/date_utils.dart';
 import '../widgets/post_image.dart';
 import 'post_detail_screen.dart';
@@ -365,6 +366,8 @@ class HomeScreenState extends State<HomeScreen> {
           _position = last;
           _loadState = _LoadState.ready;
         });
+        LocationCache.lat = last.latitude;
+        LocationCache.lng = last.longitude;
         _calculate();
         _fetchCityName(last.latitude, last.longitude);
       }
@@ -385,6 +388,8 @@ class HomeScreenState extends State<HomeScreen> {
         _position = position;
         _loadState = _LoadState.ready;
       });
+      LocationCache.lat = position.latitude;
+      LocationCache.lng = position.longitude;
       _calculate();
       _fetchCityName(position.latitude, position.longitude);
     } catch (e) {
