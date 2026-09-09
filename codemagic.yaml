@@ -45,9 +45,19 @@ workflows:
           EOF
       - name: Get Flutter packages
         script: flutter pub get
-      - name: Build signed app bundle
+      - name: Build signed app bundle (auto build number)
         script: |
-          flutter build appbundle --release
+          # Ask Google Play for the highest build number already uploaded and
+          # add 1. Falls back to the pubspec build number for the first upload
+          # (when the app/track has no builds yet).
+          LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" 2>/dev/null || true)
+          if [ -n "$LATEST" ]; then
+            echo "Latest Play build number: $LATEST -> building $(($LATEST + 1))"
+            flutter build appbundle --release --build-number=$(($LATEST + 1))
+          else
+            echo "No existing Play build number; using pubspec build number."
+            flutter build appbundle --release
+          fi
     artifacts:
       - build/**/outputs/bundle/**/*.aab
       - build/**/outputs/**/mapping.txt
@@ -77,6 +87,7 @@ workflows:
         bundle_identifier: com.muslimapp.awqat
       vars:
         BUNDLE_ID: "com.muslimapp.awqat"
+        APP_STORE_APPLE_ID: 0000000000   # <-- SET THIS: numeric Apple ID (App Store Connect > App > App Information > Apple ID)
     triggering:
       events:
         - push
@@ -90,8 +101,18 @@ workflows:
         script: find . -name "Podfile" -execdir pod install \;
       - name: Apply App Store provisioning profiles
         script: xcode-project use-profiles
-      - name: Build signed IPA
-        script: flutter build ipa --release
+      - name: Build signed IPA (auto build number)
+        script: |
+          # Ask TestFlight for the highest build number and add 1. Falls back to
+          # the pubspec build number if the Apple ID isn't set or has no builds.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || true)
+          if [ -n "$LATEST" ]; then
+            echo "Latest TestFlight build number: $LATEST -> building $(($LATEST + 1))"
+            flutter build ipa --release --build-number=$(($LATEST + 1))
+          else
+            echo "No TestFlight build number; using pubspec build number."
+            flutter build ipa --release
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

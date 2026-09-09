@@ -61,6 +61,12 @@ Play Console when you're happy.
 With this, `ios_signing` fetches/creates the distribution certificate and
 provisioning profile automatically for `com.muslimapp.awqat` — no manual certs.
 
+Also set **`APP_STORE_APPLE_ID`** in `codemagic.yaml` (ios-workflow `vars`) to your
+app's numeric Apple ID — find it in App Store Connect → your app → **App
+Information → Apple ID** (a number like `1234567890`). This lets CI auto-increment
+the build number from TestFlight. If left as `0000000000`, iOS still builds but
+uses the `pubspec.yaml` build number instead.
+
 ## 5. Run it
 
 Push to `main` (or press **Start new build** and pick a workflow). Android and
@@ -68,8 +74,11 @@ iOS each build, sign, and publish to their store's test track.
 
 ## Notes
 
-- **Build numbers:** the version comes from `pubspec.yaml` (`1.0.0+41`). Bump the
-  `+NN` before each release, or ask to switch the yaml to auto-increment from the
-  store's latest build number.
+- **Build numbers:** auto-incremented by CI — each build queries the store for the
+  latest build number and adds 1 (Android via Google Play, iOS via TestFlight),
+  so you won't hit "version code already used" rejections. The **version name**
+  (`1.0.0`) still comes from `pubspec.yaml` — bump that for user-facing releases.
+  Auto-increment needs step 3 (Play credentials) and the `APP_STORE_APPLE_ID`
+  (step 4) set; until then it safely falls back to the pubspec build number.
 - The old **Workflow Editor** settings are ignored once you switch to
   codemagic.yaml — that's intentional; the yaml is now the single source of truth.
