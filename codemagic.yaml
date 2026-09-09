@@ -1,0 +1,108 @@
+# Codemagic CI/CD configuration for the Awqat prayer-times app.
+#
+# Two workflows:
+#   * android-workflow  -> builds a signed .aab and publishes to Google Play
+#   * ios-workflow      -> builds a signed .ipa and publishes to App Store / TestFlight
+#
+# Pinning `flutter:` here is the whole point of moving to codemagic.yaml: it
+# stops the "works locally, fails on Codemagic" drift by making CI use the same
+# Flutter version as your machine. Keep this equal to your local `flutter --version`.
+#
+# Before the first run you must configure a few things in the Codemagic UI —
+# see CODEMAGIC_SETUP.md. Placeholders below are marked with <-- SET THIS.
+
+definitions:
+  flutter_version: &flutter_version 3.44.8   # <-- match your local `flutter --version`
+
+workflows:
+  # ─────────────────────────────────────────────────────────────────────────
+  android-workflow:
+    name: Android (Google Play)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: *flutter_version
+      groups:
+        - google_play          # group must contain GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+      android_signing:
+        - awqat_keystore       # <-- SET THIS: keystore reference name you upload in Codemagic
+      vars:
+        PACKAGE_NAME: "com.muslimapp.awqat"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Write key.properties for Gradle signing
+        script: |
+          cat > "$CM_BUILD_DIR/android/key.properties" <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build signed app bundle
+        script: |
+          flutter build appbundle --release
+    artifacts:
+      - build/**/outputs/bundle/**/*.aab
+      - build/**/outputs/**/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal          # promote to 'production' from Play Console once tested
+        submit_as_draft: true
+      email:
+        recipients:
+          - imanbarkus2016@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  ios-workflow:
+    name: iOS (App Store)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: awqat_asc_key   # <-- SET THIS: App Store Connect API key name in Codemagic
+    environment:
+      flutter: *flutter_version
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.muslimapp.awqat
+      vars:
+        BUNDLE_ID: "com.muslimapp.awqat"
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install CocoaPods dependencies
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Apply App Store provisioning profiles
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: flutter build ipa --release
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # submit_to_app_store: true   # uncomment to auto-submit for App Store review
+      email:
+        recipients:
+          - imanbarkus2016@gmail.com
+        notify:
+          success: true
+          failure: true
