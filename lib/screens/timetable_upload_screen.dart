@@ -6,7 +6,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' show DateFormat;
+import '../firebase_options.dart';
 import '../models/custom_prayer_times.dart';
+import '../services/auth_service.dart';
 import '../services/prayer_times_service.dart';
 
 class TimetableUploadScreen extends StatefulWidget {
@@ -20,9 +22,6 @@ enum _UploadState { idle, extracting, review, saving }
 enum _TimetableScope { month, year }
 
 class _TimetableUploadScreenState extends State<TimetableUploadScreen> {
-  static const _anthropicApiKey =
-      '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';
-
   final _picker = ImagePicker();
 
   // Selected file
@@ -140,56 +139,42 @@ Time rules:
 - Use compact arrays to keep the response short.''';
 
 
-      // Build content block based on file type
-      final Map<String, dynamic> contentBlock;
+      // Media type for the file being sent to the extraction proxy.
+      final String mediaType;
       if (_isPdf) {
-        contentBlock = {
-          'type': 'document',
-          'source': {
-            'type': 'base64',
-            'media_type': 'application/pdf',
-            'data': base64Data,
-          },
-        };
+        mediaType = 'application/pdf';
       } else {
         final ext =
             _file!.path.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
-        contentBlock = {
-          'type': 'image',
-          'source': {
-            'type': 'base64',
-            'media_type': 'image/$ext',
-            'data': base64Data,
-          },
-        };
+        mediaType = 'image/$ext';
       }
 
+      final idToken = AuthService.instance.idToken;
+      if (idToken == null) {
+        throw Exception('You must be signed in as an admin to extract times.');
+      }
+
+      // Call our server-side Cloud Function proxy instead of Anthropic directly.
+      // The Claude API key lives in the function, never in the app. The proxy
+      // verifies this admin's Firebase token, then returns Claude's response
+      // verbatim — so the parsing below is unchanged.
       final response = await http.post(
-        Uri.parse('https://api.anthropic.com/v1/messages'),
+        Uri.parse(FirebaseConfig.function('extractTimetable')),
         headers: {
-          'x-api-key': _anthropicApiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'pdfs-2024-09-25',
+          'Authorization': 'Bearer $idToken',
           'content-type': 'application/json',
         },
         body: jsonEncode({
-          'model': 'claude-haiku-4-5-20251001',
-          'max_tokens': 8192,
-          'messages': [
-            {
-              'role': 'user',
-              'content': [
-                contentBlock,
-                {'type': 'text', 'text': prompt},
-              ],
-            }
-          ],
+          'is_pdf': _isPdf,
+          'media_type': mediaType,
+          'data': base64Data,
+          'prompt': prompt,
         }),
       );
 
       if (response.statusCode != 200) {
         throw Exception(
-            'Claude API error (${response.statusCode}): ${response.body}');
+            'Extraction failed (${response.statusCode}): ${response.body}');
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;

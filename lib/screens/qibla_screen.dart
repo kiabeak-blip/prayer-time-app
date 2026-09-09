@@ -8,7 +8,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
-import 'package:logger/logger.dart';
 import '../services/location_cache.dart';
 
 class QiblaScreen extends StatefulWidget {
@@ -23,7 +22,10 @@ class _QiblaScreenState extends State<QiblaScreen> {
   String? _errorMessage;
   Position? _currentPosition;
   String _tileType = 'normal';
-  double _heading = 0;
+  // Null until the first valid compass reading arrives. Stays null on devices
+  // with no magnetometer, so we can tell "facing north (0°)" apart from
+  // "no compass sensor" and avoid a misleading alignment / frozen dial.
+  double? _heading;
   StreamSubscription<CompassEvent>? _compassSub;
   final MapController _mapController = MapController();
   bool _compassLocked = false;
@@ -286,10 +288,13 @@ class _QiblaScreenState extends State<QiblaScreen> {
           else if (isMobile)
             Builder(
               builder: (context) {
-                final heading = _heading;
+                // heading is null on devices without a compass sensor; fall
+                // back to 0 (north up) for drawing but never claim alignment.
+                final hasCompass = _heading != null;
+                final heading = _heading ?? 0;
                 final rotation = (qiblaBearing - heading) * (math.pi / 180);
-                final isAligned = ((qiblaBearing - heading) % 360).abs() < 10 ||
-                    ((qiblaBearing - heading) % 360).abs() > 350;
+                final delta = ((qiblaBearing - heading) % 360 + 360) % 360;
+                final isAligned = hasCompass && (delta < 10 || delta > 350);
 
                 return Container(
                   color: isAligned
@@ -320,8 +325,9 @@ class _QiblaScreenState extends State<QiblaScreen> {
                                     : Colors.white,
                               ),
                             ),
-                            // N/S/E/W labels
-                            ..._compassLabels(isAligned),
+                            // N/S/E/W rose — rotates with the live heading so
+                            // N always points to true north as the phone turns.
+                            _compassRose(isAligned, heading),
                             // Rotating Kaaba arrow
                             Transform.rotate(
                               angle: rotation,
@@ -357,9 +363,12 @@ class _QiblaScreenState extends State<QiblaScreen> {
                       const SizedBox(height: 12),
                       // Status text
                       Text(
-                        isAligned
-                            ? '🕋 You are facing the Kaaba!'
-                            : 'Turn to align the Kaaba arrow upward',
+                        !hasCompass
+                            ? 'Compass unavailable — follow the map below'
+                            : isAligned
+                                ? '🕋 You are facing the Kaaba!'
+                                : 'Turn to align the Kaaba arrow upward',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -398,7 +407,7 @@ class _QiblaScreenState extends State<QiblaScreen> {
                   bounds: bounds,
                   padding: const EdgeInsets.all(50),
                 ),
-                initialRotation: -_heading,
+                initialRotation: -(_heading ?? 0),
               ),
               children: [
                 ..._buildTileLayers(),
@@ -489,15 +498,30 @@ class _QiblaScreenState extends State<QiblaScreen> {
     }
   }
 
-  List<Widget> _compassLabels(bool isAligned) {
+  /// Compass rose (N/S/E/W) that rotates with the device heading so that N
+  /// always points to true north. Because the whole rose rotates by -heading
+  /// and the Kaaba needle rotates by (qibla - heading), the two move together
+  /// like a real magnetic compass: face the Qibla and the needle points up.
+  Widget _compassRose(bool isAligned, double heading) {
     final color = isAligned ? Colors.white70 : Colors.grey.shade500;
+    final northColor = isAligned ? Colors.redAccent.shade100 : Colors.red.shade600;
     const style = TextStyle(fontSize: 12, fontWeight: FontWeight.bold);
-    return [
-      Positioned(top: 8,  child: Text('N', style: style.copyWith(color: color))),
-      Positioned(bottom: 8, child: Text('S', style: style.copyWith(color: color))),
-      Positioned(left: 8,  child: Text('W', style: style.copyWith(color: color))),
-      Positioned(right: 8, child: Text('E', style: style.copyWith(color: color))),
-    ];
+    return Transform.rotate(
+      angle: -heading * (math.pi / 180),
+      child: SizedBox(
+        width: 200,
+        height: 200,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned(top: 8,    child: Text('N', style: style.copyWith(color: northColor))),
+            Positioned(bottom: 8, child: Text('S', style: style.copyWith(color: color))),
+            Positioned(left: 8,   child: Text('W', style: style.copyWith(color: color))),
+            Positioned(right: 8,  child: Text('E', style: style.copyWith(color: color))),
+          ],
+        ),
+      ),
+    );
   }
 }
 

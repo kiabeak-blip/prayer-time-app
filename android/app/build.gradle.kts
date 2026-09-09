@@ -17,7 +17,7 @@ if (keyPropertiesFile.exists()) {
 
 android {
     namespace = "com.muslimapp.awqat"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36 // Android 16 (Google Play target API requirement, 2026)
     ndkVersion = "28.2.13676358"
     
 
@@ -45,7 +45,7 @@ android {
     defaultConfig {
         applicationId = "com.muslimapp.awqat"
         minSdk = 29 // Android 10+
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36 // Android 16 (Google Play target API requirement, 2026)
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
