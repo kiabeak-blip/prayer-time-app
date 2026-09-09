@@ -28,7 +28,7 @@ Codemagic needs its own copy of your release keystore (`prayertimes-release.jks`
 
 1. Codemagic → **Teams/App settings → Code signing identities → Android keystores**
 2. **Upload** `prayertimes-release.jks` and enter:
-   - **Reference name:** `awqat_keystore`  ← must match `android_signing` in the yaml
+   - **Reference name:** `prayertimesyaml`  ← must match `android_signing` in the yaml
    - **Keystore password**, **Key alias**, **Key password** (same values as your
      local `android/key.properties`)
 
