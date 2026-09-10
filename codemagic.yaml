@@ -22,8 +22,8 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       flutter: *flutter_version
-      # groups:                # <-- re-enable after adding the Play service account
-      #   - google_play        #     (group must contain GCLOUD_SERVICE_ACCOUNT_CREDENTIALS)
+      groups:
+        - google_play          # contains GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
       android_signing:
         - prayertimesyaml      # keystore reference name uploaded in Codemagic
       vars:
@@ -62,11 +62,10 @@ workflows:
       - build/**/outputs/bundle/**/*.aab
       - build/**/outputs/**/mapping.txt
     publishing:
-      # Re-enable once GCLOUD_SERVICE_ACCOUNT_CREDENTIALS is set (see CODEMAGIC_SETUP.md step 3):
-      # google_play:
-      #   credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-      #   track: internal          # promote to 'production' from Play Console once tested
-      #   submit_as_draft: true
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal          # promote to 'production' from Play Console once tested
+        submit_as_draft: true
       email:
         recipients:
           - imanbarkus2016@gmail.com
