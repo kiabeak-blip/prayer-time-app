@@ -96,20 +96,16 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods dependencies
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Create a distribution certificate we control
+      - name: Set up code signing (new cert from a generated key + profile)
         script: |
-          # An existing distribution cert on the account has no private key on this
-          # machine, so signing fails. Create a fresh one Codemagic owns (with key).
-          # If Apple's certificate limit is hit, this prints an error we can act on.
           keychain initialize
-          app-store-connect create-certificate \
-            --type IOS_DISTRIBUTION \
-            --save \
-            || echo "WARNING: could not create a new distribution certificate (possibly at Apple's limit)."
-      - name: Fetch/create provisioning profile and apply signing
-        script: |
+          # Generate a private key so a NEW distribution certificate can be created.
+          # (The existing cert on the account has no private key on this machine, so
+          # "Cannot create resource without certificate private key" was the failure.)
+          openssl genrsa -out /tmp/ios_cert_key.pem 2048
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key=@file:/tmp/ios_cert_key.pem \
             --create
           keychain add-certificates
           xcode-project use-profiles
