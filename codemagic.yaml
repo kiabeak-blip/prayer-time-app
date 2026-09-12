@@ -82,6 +82,8 @@ workflows:
       app_store_connect: awqat_asc_key   # <-- SET THIS: App Store Connect API key name in Codemagic
     environment:
       flutter: *flutter_version
+      groups:
+        - ios_signing          # must contain CERTIFICATE_PRIVATE_KEY (persistent RSA key)
       vars:
         BUNDLE_ID: "com.muslimapp.awqat"
         APP_STORE_APPLE_ID: 0000000000   # <-- SET THIS: numeric Apple ID (App Store Connect > App > App Information > Apple ID)
@@ -96,16 +98,15 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods dependencies
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Set up code signing (new cert from a generated key + profile)
+      - name: Set up code signing (reuse persistent cert)
         script: |
           keychain initialize
-          # Generate a private key so a NEW distribution certificate can be created.
-          # (The existing cert on the account has no private key on this machine, so
-          # "Cannot create resource without certificate private key" was the failure.)
-          openssl genrsa -out /tmp/ios_cert_key.pem 2048
+          # Use ONE persistent private key (stored in Codemagic as CERTIFICATE_PRIVATE_KEY)
+          # so the distribution certificate is created once and reused every build —
+          # instead of minting a new cert per build and hitting Apple's 2-cert limit.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key=@file:/tmp/ios_cert_key.pem \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
           xcode-project use-profiles
