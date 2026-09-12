@@ -96,11 +96,18 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods dependencies
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Set up code signing (fetch or create cert + profile)
+      - name: Create a distribution certificate we control
         script: |
-          # Uses the App Store Connect API key from the awqat_asc_key integration.
-          # --create makes the distribution certificate/profile if they don't exist.
+          # An existing distribution cert on the account has no private key on this
+          # machine, so signing fails. Create a fresh one Codemagic owns (with key).
+          # If Apple's certificate limit is hit, this prints an error we can act on.
           keychain initialize
+          app-store-connect create-certificate \
+            --type IOS_DISTRIBUTION \
+            --save \
+            || echo "WARNING: could not create a new distribution certificate (possibly at Apple's limit)."
+      - name: Fetch/create provisioning profile and apply signing
+        script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
