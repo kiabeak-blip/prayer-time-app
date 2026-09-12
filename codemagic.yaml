@@ -82,9 +82,6 @@ workflows:
       app_store_connect: awqat_asc_key   # <-- SET THIS: App Store Connect API key name in Codemagic
     environment:
       flutter: *flutter_version
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.muslimapp.awqat
       vars:
         BUNDLE_ID: "com.muslimapp.awqat"
         APP_STORE_APPLE_ID: 0000000000   # <-- SET THIS: numeric Apple ID (App Store Connect > App > App Information > Apple ID)
@@ -99,8 +96,16 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods dependencies
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Apply App Store provisioning profiles
-        script: xcode-project use-profiles
+      - name: Set up code signing (fetch or create cert + profile)
+        script: |
+          # Uses the App Store Connect API key from the awqat_asc_key integration.
+          # --create makes the distribution certificate/profile if they don't exist.
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Build signed IPA (auto build number)
         script: |
           # Ask TestFlight for the highest build number and add 1. Falls back to
